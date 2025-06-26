@@ -69,100 +69,138 @@ async function searchYouTubeVideos(keyword: string) {
   try {
     console.log(`YouTube API로 검색 시작: "${keyword}"`)
     
-    // 키워드 정리 - 특수문자 제거
-    const cleanKeyword = keyword.replace(/[#@]/g, '').trim()
+    // 키워드 정리 - 특수문자 제거하되 더 관대하게
+    let cleanKeyword = keyword.replace(/[#@]/g, '').trim()
     console.log(`정리된 키워드: "${cleanKeyword}"`)
     
+    // 키워드가 비어있으면 원본 키워드 사용
     if (!cleanKeyword) {
-      console.log('키워드가 비어있어서 모의 데이터 반환')
+      cleanKeyword = keyword.trim()
+      console.log(`원본 키워드 사용: "${cleanKeyword}"`)
+    }
+    
+    if (!cleanKeyword) {
+      console.log('키워드가 완전히 비어있어서 모의 데이터 반환')
       return generateMockVideos(keyword)
     }
     
-    // 최근 6개월로 범위 설정
-    const sixMonthsAgo = new Date()
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
-    const publishedAfter = sixMonthsAgo.toISOString()
-    
-    console.log(`검색 범위: ${publishedAfter} 이후`)
-    
-    // 단순하고 관대한 검색 (한 번만 시도)
-    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(cleanKeyword)}&type=video&order=relevance&regionCode=KR&publishedAfter=${publishedAfter}&maxResults=25&key=${YOUTUBE_API_KEY}`
-    
-    console.log('YouTube API 요청 시작...')
-    const searchResponse = await fetch(searchUrl)
-    
-    if (!searchResponse.ok) {
-      const errorText = await searchResponse.text()
-      console.error('YouTube 검색 API 오류:', {
-        status: searchResponse.status,
-        statusText: searchResponse.statusText,
-        error: errorText
-      })
-      return generateMockVideos(keyword)
-    }
-    
-    const searchData = await searchResponse.json()
-    console.log(`검색 결과: ${searchData.items?.length || 0}개`)
-    
-    if (!searchData.items || searchData.items.length === 0) {
-      console.log('검색 결과가 없어서 모의 데이터 반환')
-      return generateMockVideos(keyword)
-    }
-    
-    // 영상 상세 정보 가져오기
-    const videoIds = searchData.items.slice(0, 20).map((item: any) => item.id.videoId).join(',')
-    console.log(`상세 정보 요청할 영상 수: ${searchData.items.slice(0, 20).length}개`)
-    
-    const detailsResponse = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id=${videoIds}&key=${YOUTUBE_API_KEY}`
-    )
-    
-    if (!detailsResponse.ok) {
-      console.error('영상 상세 정보 요청 실패:', detailsResponse.status, detailsResponse.statusText)
-      // 상세 정보 없이도 기본 정보로 반환
-      const basicVideos = searchData.items.slice(0, 12).map((item: any) => ({
-        id: item.id.videoId,
-        title: item.snippet.title,
-        thumbnail: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
-        views: '조회수 정보 없음',
-        duration: '시간 정보 없음',
-        channelTitle: item.snippet.channelTitle,
-        publishedAt: formatPublishedDate(item.snippet.publishedAt)
-      }))
-      
-      console.log(`기본 정보로 ${basicVideos.length}개 영상 반환`)
-      return basicVideos
-    }
-    
-    const detailsData = await detailsResponse.json()
-    console.log(`상세 정보 받은 영상 수: ${detailsData.items?.length || 0}개`)
-    
-    // 데이터 결합 (조회수 필터링 제거 - 모든 영상 포함)
-    const videos = searchData.items.slice(0, 15).map((searchItem: any) => {
-      const details = detailsData.items?.find((detail: any) => detail.id === searchItem.id.videoId)
-      const viewCount = parseInt(details?.statistics?.viewCount || '0')
-      
-      return {
-        id: searchItem.id.videoId,
-        title: searchItem.snippet.title,
-        thumbnail: searchItem.snippet.thumbnails.medium?.url || searchItem.snippet.thumbnails.default?.url,
-        views: viewCount > 0 ? formatViewCount(viewCount) : '조회수 정보 없음',
-        duration: details?.contentDetails?.duration ? formatDuration(details.contentDetails.duration) : '시간 정보 없음',
-        channelTitle: searchItem.snippet.channelTitle,
-        publishedAt: formatPublishedDate(searchItem.snippet.publishedAt),
-        rawViewCount: viewCount,
-        rawPublishedAt: searchItem.snippet.publishedAt
+    // 여러 검색 전략 시도
+    const searchStrategies = [
+      // 1. 기본 검색 (관련성 순, 지역 제한 없음, 시간 제한 없음)
+      {
+        name: '기본 검색',
+        url: `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(cleanKeyword)}&type=video&order=relevance&maxResults=25&key=${YOUTUBE_API_KEY}`
+      },
+      // 2. 인기순 검색
+      {
+        name: '인기순 검색', 
+        url: `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(cleanKeyword)}&type=video&order=viewCount&maxResults=25&key=${YOUTUBE_API_KEY}`
+      },
+      // 3. 최신순 검색
+      {
+        name: '최신순 검색',
+        url: `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(cleanKeyword)}&type=video&order=date&maxResults=25&key=${YOUTUBE_API_KEY}`
+      },
+      // 4. 한국 지역 제한 검색
+      {
+        name: '한국 지역 검색',
+        url: `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(cleanKeyword)}&type=video&order=relevance&regionCode=KR&maxResults=25&key=${YOUTUBE_API_KEY}`
       }
-    })
+    ]
     
-    // 조회수 순으로 정렬 (0도 포함)
-    const sortedVideos = videos.sort((a: any, b: any) => b.rawViewCount - a.rawViewCount)
+    for (const strategy of searchStrategies) {
+      console.log(`${strategy.name} 시도 중...`)
+      
+      try {
+        const searchResponse = await fetch(strategy.url)
+        
+        if (!searchResponse.ok) {
+          const errorText = await searchResponse.text()
+          console.error(`${strategy.name} API 오류:`, {
+            status: searchResponse.status,
+            statusText: searchResponse.statusText,
+            error: errorText
+          })
+          continue // 다음 전략 시도
+        }
+        
+        const searchData = await searchResponse.json()
+        console.log(`${strategy.name} 결과: ${searchData.items?.length || 0}개`)
+        
+        if (searchData.items && searchData.items.length > 0) {
+          console.log(`${strategy.name}으로 성공! 상세 정보 가져오는 중...`)
+          
+          // 영상 상세 정보 가져오기
+          const videoIds = searchData.items.slice(0, 20).map((item: any) => item.id.videoId).join(',')
+          console.log(`상세 정보 요청할 영상 수: ${searchData.items.slice(0, 20).length}개`)
+          
+          try {
+            const detailsResponse = await fetch(
+              `https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id=${videoIds}&key=${YOUTUBE_API_KEY}`
+            )
+            
+            let detailsData = null
+            if (detailsResponse.ok) {
+              detailsData = await detailsResponse.json()
+              console.log(`상세 정보 받은 영상 수: ${detailsData.items?.length || 0}개`)
+            } else {
+              console.warn('상세 정보 요청 실패, 기본 정보만 사용')
+            }
+            
+            // 데이터 결합
+            const videos = searchData.items.slice(0, 15).map((searchItem: any) => {
+              const details = detailsData?.items?.find((detail: any) => detail.id === searchItem.id.videoId)
+              const viewCount = parseInt(details?.statistics?.viewCount || '0')
+              
+              return {
+                id: searchItem.id.videoId,
+                title: searchItem.snippet.title,
+                thumbnail: searchItem.snippet.thumbnails.medium?.url || searchItem.snippet.thumbnails.default?.url,
+                views: viewCount > 0 ? formatViewCount(viewCount) : '조회수 정보 없음',
+                duration: details?.contentDetails?.duration ? formatDuration(details.contentDetails.duration) : '시간 정보 없음',
+                channelTitle: searchItem.snippet.channelTitle,
+                publishedAt: formatPublishedDate(searchItem.snippet.publishedAt),
+                rawViewCount: viewCount,
+                rawPublishedAt: searchItem.snippet.publishedAt
+              }
+            })
+            
+            // 조회수 순으로 정렬
+            const sortedVideos = videos.sort((a: any, b: any) => b.rawViewCount - a.rawViewCount)
+            
+            console.log(`${strategy.name}으로 최종 반환할 영상 수: ${sortedVideos.length}개`)
+            return sortedVideos.slice(0, 12)
+            
+          } catch (detailError) {
+            console.error('상세 정보 처리 중 오류:', detailError)
+            // 기본 정보만으로 반환
+            const basicVideos = searchData.items.slice(0, 12).map((item: any) => ({
+              id: item.id.videoId,
+              title: item.snippet.title,
+              thumbnail: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
+              views: '조회수 정보 없음',
+              duration: '시간 정보 없음',
+              channelTitle: item.snippet.channelTitle,
+              publishedAt: formatPublishedDate(item.snippet.publishedAt)
+            }))
+            
+            console.log(`${strategy.name}으로 기본 정보만 ${basicVideos.length}개 영상 반환`)
+            return basicVideos
+          }
+        }
+        
+      } catch (strategyError) {
+        console.error(`${strategy.name} 중 오류:`, strategyError)
+        continue // 다음 전략 시도
+      }
+    }
     
-    console.log(`최종 반환할 영상 수: ${sortedVideos.length}개`)
-    return sortedVideos.slice(0, 12)
+    // 모든 전략 실패
+    console.log('모든 검색 전략 실패, 모의 데이터 반환')
+    return generateMockVideos(keyword)
     
   } catch (error) {
-    console.error('YouTube 검색 중 오류 발생:', error)
+    console.error('YouTube 검색 중 전체 오류 발생:', error)
     return generateMockVideos(keyword)
   }
 }
