@@ -75,6 +75,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'trends' | 'analysis' | 'marketing'>('trends')
+  const [selectedVideoUrl, setSelectedVideoUrl] = useState<string>('')
 
   const handleAnalyze = async (url: string, commentLimit?: number) => {
     setIsLoading(true)
@@ -103,6 +104,11 @@ export default function Home() {
     }
   }
 
+  const handleVideoSelect = (videoUrl: string) => {
+    setSelectedVideoUrl(videoUrl)
+    setActiveTab('analysis')
+  }
+
   return (
     <div className="space-y-8 min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-7xl mx-auto">
@@ -116,9 +122,14 @@ export default function Home() {
           </p>
         </div>
 
+        {/* URL 입력 섹션 - 트렌드 탭이 아닐 때만 표시 */}
         {activeTab !== 'trends' && (
-          <div className="max-w-2xl mx-auto mb-8">
-            <URLInput onAnalyze={handleAnalyze} isLoading={isLoading} />
+          <div className="max-w-3xl mx-auto mb-8">
+            <URLInput 
+              onAnalyze={handleAnalyze} 
+              isLoading={isLoading} 
+              selectedUrl={selectedVideoUrl}
+            />
           </div>
         )}
 
@@ -141,13 +152,13 @@ export default function Home() {
           </div>
         )}
 
-        <div className="flex bg-white rounded-lg p-1 shadow-md mb-6 max-w-lg mx-auto">
+        <div className="flex bg-white rounded-xl p-1.5 shadow-lg mb-8 max-w-2xl mx-auto border">
           <button
             onClick={() => setActiveTab('trends')}
-            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+            className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200 ${
               activeTab === 'trends'
-                ? 'bg-blue-600 text-white'
-                : 'text-gray-600 hover:text-gray-800'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
             }`}
           >
             🔥 트렌드 모니터링
@@ -155,11 +166,11 @@ export default function Home() {
           <button
             onClick={() => setActiveTab('analysis')}
             disabled={!analysisData}
-            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+            className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200 ${
               activeTab === 'analysis'
-                ? 'bg-blue-600 text-white'
+                ? 'bg-blue-600 text-white shadow-md'
                 : analysisData
-                  ? 'text-gray-600 hover:text-gray-800'
+                  ? 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
                   : 'text-gray-400 cursor-not-allowed'
             }`}
           >
@@ -168,11 +179,11 @@ export default function Home() {
           <button
             onClick={() => setActiveTab('marketing')}
             disabled={!analysisData}
-            className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+            className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200 ${
               activeTab === 'marketing'
-                ? 'bg-blue-600 text-white'
+                ? 'bg-blue-600 text-white shadow-md'
                 : analysisData
-                  ? 'text-gray-600 hover:text-gray-800'
+                  ? 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
                   : 'text-gray-400 cursor-not-allowed'
             }`}
           >
@@ -184,10 +195,7 @@ export default function Home() {
           {activeTab === 'trends' && (
             <div className="animate-fade-in">
               <TrendMonitor 
-                onVideoSelect={(url) => {
-                  handleAnalyze(url)
-                  setActiveTab('analysis')
-                }}
+                onVideoSelect={handleVideoSelect}
               />
             </div>
           )}

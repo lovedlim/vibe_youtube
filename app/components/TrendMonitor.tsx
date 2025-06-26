@@ -226,16 +226,27 @@ const TrendMonitor: React.FC<TrendMonitorProps> = ({ onVideoSelect }) => {
               trendVideos.map((video, index) => (
                 <div
                   key={index}
-                  className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-blue-50 hover:border-blue-300 cursor-pointer transition-all duration-200 group"
                   onClick={() => handleVideoClick(video)}
                 >
-                  <img
-                    src={video.thumbnail}
-                    alt={video.title}
-                    className="w-20 h-14 object-cover rounded"
-                  />
+                  <div className="relative">
+                    <img
+                      src={video.thumbnail}
+                      alt={video.title}
+                      className="w-20 h-14 object-cover rounded"
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded transition-all duration-200 flex items-center justify-center">
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <div className="bg-white rounded-full p-1.5 shadow-md">
+                          <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-gray-800 text-sm line-clamp-2 mb-1">
+                    <h4 className="font-medium text-gray-800 text-sm line-clamp-2 mb-1 group-hover:text-blue-800 transition-colors">
                       {video.title}
                     </h4>
                     <div className="text-xs text-gray-500 space-y-1">
@@ -244,6 +255,14 @@ const TrendMonitor: React.FC<TrendMonitorProps> = ({ onVideoSelect }) => {
                         <span>👁️ {video.views}</span>
                         <span>⏱️ {video.duration}</span>
                         <span>📅 {video.publishedAt}</span>
+                      </div>
+                    </div>
+                    <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      <div className="inline-flex items-center text-xs text-blue-600 font-medium">
+                        📊 클릭하여 분석하기
+                        <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
                       </div>
                     </div>
                   </div>
@@ -260,7 +279,8 @@ const TrendMonitor: React.FC<TrendMonitorProps> = ({ onVideoSelect }) => {
         <ul className="text-sm text-blue-700 space-y-1">
           <li>• 왼쪽 패널에서 실시간 트렌드 키워드를 확인하세요</li>
           <li>• 키워드를 클릭하면 관련 인기 영상이 오른쪽에 표시됩니다</li>
-          <li>• 영상을 클릭하면 해당 영상의 상세 분석으로 이동합니다</li>
+          <li>• 영상을 클릭하면 분석 탭으로 이동하여 해당 영상의 URL이 자동 입력됩니다</li>
+          <li>• 분석 탭에서 "분석 시작" 버튼을 클릭하여 상세 분석을 실행하세요</li>
           <li>• 🔄 새로고침 버튼으로 최신 트렌드를 업데이트하세요</li>
         </ul>
       </div>
