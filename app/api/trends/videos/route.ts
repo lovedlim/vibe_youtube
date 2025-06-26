@@ -67,108 +67,51 @@ async function searchYouTubeVideos(keyword: string) {
   }
 
   try {
-    console.log(`YouTube API로 검색 시작: ${keyword}`)
+    console.log(`YouTube API로 검색 시작: "${keyword}"`)
     
-    // 검색 키워드 최적화 - AI 관련이 아닌 키워드도 포함
-    let enhancedKeyword = keyword
-    const aiKeywords = ['AI', '인공지능', 'ChatGPT', 'GPT', '머신러닝', '딥러닝', '블록체인', '기술', '코딩', '프로그래밍']
-    const isAIRelated = aiKeywords.some(ai => keyword.toLowerCase().includes(ai.toLowerCase()))
+    // 키워드 정리 - 특수문자 제거
+    const cleanKeyword = keyword.replace(/[#@]/g, '').trim()
+    console.log(`정리된 키워드: "${cleanKeyword}"`)
     
-    if (isAIRelated) {
-      enhancedKeyword = `${keyword} 기술 트렌드`
+    if (!cleanKeyword) {
+      console.log('키워드가 비어있어서 모의 데이터 반환')
+      return generateMockVideos(keyword)
     }
     
-    // 최근 1년 이내로 범위 확대 (6개월 → 1년)
-    const oneYearAgo = new Date()
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-    const publishedAfter = oneYearAgo.toISOString()
+    // 최근 6개월로 범위 설정
+    const sixMonthsAgo = new Date()
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+    const publishedAfter = sixMonthsAgo.toISOString()
     
-    let allVideos: any[] = []
+    console.log(`검색 범위: ${publishedAfter} 이후`)
     
-    // 1단계: 관련성 기준으로 검색 (relevance)
-    console.log('1단계: 관련성 기준 검색')
-    const relevanceResponse = await fetch(
-      `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(enhancedKeyword)}&type=video&order=relevance&regionCode=KR&publishedAfter=${publishedAfter}&maxResults=20&key=${YOUTUBE_API_KEY}`
-    )
+    // 단순하고 관대한 검색 (한 번만 시도)
+    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(cleanKeyword)}&type=video&order=relevance&regionCode=KR&publishedAfter=${publishedAfter}&maxResults=25&key=${YOUTUBE_API_KEY}`
     
-    if (relevanceResponse.ok) {
-      const relevanceData = await relevanceResponse.json()
-      console.log(`관련성 검색 결과: ${relevanceData.items?.length || 0}개`)
-      if (relevanceData.items) {
-        allVideos = [...allVideos, ...relevanceData.items]
-      }
-    } else {
-      console.error('관련성 검색 실패:', relevanceResponse.status, relevanceResponse.statusText)
+    console.log('YouTube API 요청 시작...')
+    const searchResponse = await fetch(searchUrl)
+    
+    if (!searchResponse.ok) {
+      const errorText = await searchResponse.text()
+      console.error('YouTube 검색 API 오류:', {
+        status: searchResponse.status,
+        statusText: searchResponse.statusText,
+        error: errorText
+      })
+      return generateMockVideos(keyword)
     }
     
-    // 2단계: 인기순으로 검색 (viewCount)
-    console.log('2단계: 인기순 검색')
-    const popularResponse = await fetch(
-      `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(enhancedKeyword)}&type=video&order=viewCount&regionCode=KR&publishedAfter=${publishedAfter}&maxResults=15&key=${YOUTUBE_API_KEY}`
-    )
+    const searchData = await searchResponse.json()
+    console.log(`검색 결과: ${searchData.items?.length || 0}개`)
     
-    if (popularResponse.ok) {
-      const popularData = await popularResponse.json()
-      console.log(`인기순 검색 결과: ${popularData.items?.length || 0}개`)
-      if (popularData.items) {
-        const existingIds = new Set(allVideos.map(item => item.id.videoId))
-        const newVideos = popularData.items.filter((item: any) => !existingIds.has(item.id.videoId))
-        allVideos = [...allVideos, ...newVideos]
-      }
-    } else {
-      console.error('인기순 검색 실패:', popularResponse.status, popularResponse.statusText)
-    }
-    
-    // 3단계: 원래 키워드로만 검색 (fallback)
-    if (allVideos.length < 10) {
-      console.log('3단계: 원래 키워드로 fallback 검색')
-      const fallbackResponse = await fetch(
-        `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(keyword)}&type=video&order=relevance&regionCode=KR&publishedAfter=${publishedAfter}&maxResults=20&key=${YOUTUBE_API_KEY}`
-      )
-      
-      if (fallbackResponse.ok) {
-        const fallbackData = await fallbackResponse.json()
-        console.log(`Fallback 검색 결과: ${fallbackData.items?.length || 0}개`)
-        if (fallbackData.items) {
-          const existingIds = new Set(allVideos.map(item => item.id.videoId))
-          const newVideos = fallbackData.items.filter((item: any) => !existingIds.has(item.id.videoId))
-          allVideos = [...allVideos, ...newVideos]
-        }
-      }
-    }
-    
-    // 4단계: 더 넓은 범위로 검색 (2년)
-    if (allVideos.length < 5) {
-      console.log('4단계: 2년 범위로 확대 검색')
-      const twoYearsAgo = new Date()
-      twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2)
-      const extendedPublishedAfter = twoYearsAgo.toISOString()
-      
-      const extendedResponse = await fetch(
-        `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(keyword)}&type=video&order=viewCount&regionCode=KR&publishedAfter=${extendedPublishedAfter}&maxResults=20&key=${YOUTUBE_API_KEY}`
-      )
-      
-      if (extendedResponse.ok) {
-        const extendedData = await extendedResponse.json()
-        console.log(`확대 검색 결과: ${extendedData.items?.length || 0}개`)
-        if (extendedData.items) {
-          const existingIds = new Set(allVideos.map(item => item.id.videoId))
-          const newVideos = extendedData.items.filter((item: any) => !existingIds.has(item.id.videoId))
-          allVideos = [...allVideos, ...newVideos]
-        }
-      }
-    }
-    
-    console.log(`총 검색된 영상 수: ${allVideos.length}개`)
-    
-    if (allVideos.length === 0) {
-      console.log('검색 결과가 없어 모의 데이터 반환')
+    if (!searchData.items || searchData.items.length === 0) {
+      console.log('검색 결과가 없어서 모의 데이터 반환')
       return generateMockVideos(keyword)
     }
     
     // 영상 상세 정보 가져오기
-    const videoIds = allVideos.slice(0, 30).map((item: any) => item.id.videoId).join(',')
-    console.log(`상세 정보 요청할 영상 ID들: ${videoIds.substring(0, 100)}...`)
+    const videoIds = searchData.items.slice(0, 20).map((item: any) => item.id.videoId).join(',')
+    console.log(`상세 정보 요청할 영상 수: ${searchData.items.slice(0, 20).length}개`)
     
     const detailsResponse = await fetch(
       `https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id=${videoIds}&key=${YOUTUBE_API_KEY}`
@@ -176,14 +119,26 @@ async function searchYouTubeVideos(keyword: string) {
     
     if (!detailsResponse.ok) {
       console.error('영상 상세 정보 요청 실패:', detailsResponse.status, detailsResponse.statusText)
-      return generateMockVideos(keyword)
+      // 상세 정보 없이도 기본 정보로 반환
+      const basicVideos = searchData.items.slice(0, 12).map((item: any) => ({
+        id: item.id.videoId,
+        title: item.snippet.title,
+        thumbnail: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
+        views: '조회수 정보 없음',
+        duration: '시간 정보 없음',
+        channelTitle: item.snippet.channelTitle,
+        publishedAt: formatPublishedDate(item.snippet.publishedAt)
+      }))
+      
+      console.log(`기본 정보로 ${basicVideos.length}개 영상 반환`)
+      return basicVideos
     }
     
     const detailsData = await detailsResponse.json()
     console.log(`상세 정보 받은 영상 수: ${detailsData.items?.length || 0}개`)
     
-    // 데이터 결합 및 조회수 필터링 (1만회 → 1천회로 완화)
-    const videos = allVideos.slice(0, 30).map((searchItem: any) => {
+    // 데이터 결합 (조회수 필터링 제거 - 모든 영상 포함)
+    const videos = searchData.items.slice(0, 15).map((searchItem: any) => {
       const details = detailsData.items?.find((detail: any) => detail.id === searchItem.id.videoId)
       const viewCount = parseInt(details?.statistics?.viewCount || '0')
       
@@ -191,45 +146,23 @@ async function searchYouTubeVideos(keyword: string) {
         id: searchItem.id.videoId,
         title: searchItem.snippet.title,
         thumbnail: searchItem.snippet.thumbnails.medium?.url || searchItem.snippet.thumbnails.default?.url,
-        views: formatViewCount(viewCount),
-        duration: formatDuration(details?.contentDetails?.duration || 'PT0S'),
+        views: viewCount > 0 ? formatViewCount(viewCount) : '조회수 정보 없음',
+        duration: details?.contentDetails?.duration ? formatDuration(details.contentDetails.duration) : '시간 정보 없음',
         channelTitle: searchItem.snippet.channelTitle,
         publishedAt: formatPublishedDate(searchItem.snippet.publishedAt),
         rawViewCount: viewCount,
         rawPublishedAt: searchItem.snippet.publishedAt
       }
     })
-    .filter((video: any) => {
-      // 최소 조회수 필터링 완화 (1만회 → 1천회)
-      return video.rawViewCount >= 1000
-    })
     
-    console.log(`필터링 후 영상 수: ${videos.length}개`)
+    // 조회수 순으로 정렬 (0도 포함)
+    const sortedVideos = videos.sort((a: any, b: any) => b.rawViewCount - a.rawViewCount)
     
-    // 조회수와 최신성을 조합한 점수로 정렬
-    const scoredVideos = videos.map((video: any) => {
-      const daysSincePublished = Math.floor((Date.now() - new Date(video.rawPublishedAt).getTime()) / (1000 * 60 * 60 * 24))
-      const viewScore = Math.log10(video.rawViewCount + 1) // 로그 스케일로 조회수 점수
-      const recencyScore = Math.max(0, 365 - daysSincePublished) / 365 // 1년 이내일수록 높은 점수
-      const totalScore = viewScore * 0.6 + recencyScore * 0.4 // 조회수 60%, 최신성 40%
-      
-      return {
-        ...video,
-        score: totalScore
-      }
-    })
-    
-    // 점수 기준으로 정렬하고 상위 12개 반환
-    const finalVideos = scoredVideos
-      .sort((a: any, b: any) => b.score - a.score)
-      .slice(0, 12)
-      .map(({ rawViewCount, rawPublishedAt, score, ...video }) => video) // 불필요한 필드 제거
-    
-    console.log(`최종 반환할 영상 수: ${finalVideos.length}개`)
-    return finalVideos
+    console.log(`최종 반환할 영상 수: ${sortedVideos.length}개`)
+    return sortedVideos.slice(0, 12)
     
   } catch (error) {
-    console.error('YouTube 영상 검색 실패:', error)
+    console.error('YouTube 검색 중 오류 발생:', error)
     return generateMockVideos(keyword)
   }
 }
