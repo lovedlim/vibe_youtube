@@ -51,9 +51,13 @@ const TrendMonitor: React.FC<TrendMonitorProps> = ({ onVideoSelect }) => {
 
   const searchTrendVideos = async (keyword: string) => {
     try {
+      console.log('=== 프론트엔드: 트렌드 영상 검색 시작 ===')
+      console.log('검색할 키워드:', keyword)
+      
       setLoading(true)
       setSelectedKeyword(keyword)
       
+      console.log('API 호출 시작: /api/trends/videos')
       const response = await fetch('/api/trends/videos', {
         method: 'POST',
         headers: {
@@ -62,8 +66,20 @@ const TrendMonitor: React.FC<TrendMonitorProps> = ({ onVideoSelect }) => {
         body: JSON.stringify({ keyword })
       })
       
+      console.log('API 응답 상태:', response.status, response.statusText)
+      
+      if (!response.ok) {
+        console.error('API 응답 오류:', response.status, response.statusText)
+        throw new Error(`API 오류: ${response.status}`)
+      }
+      
       const data = await response.json()
+      console.log('API 응답 데이터:', data)
+      console.log('받은 영상 수:', data.videos?.length || 0)
+      
       setTrendVideos(data.videos || [])
+      console.log('=== 프론트엔드: 트렌드 영상 검색 완료 ===')
+      
     } catch (error) {
       console.error('트렌드 영상 검색 실패:', error)
     } finally {
